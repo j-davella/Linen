@@ -1,0 +1,12 @@
+# Rust/Tauri build output
+src-tauri/target/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Linen data
+.linen/
+
+# Nix
+result

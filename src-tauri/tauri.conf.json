@@ -1,0 +1,26 @@
+{
+  "productName": "Linen",
+  "version": "0.1.0",
+  "identifier": "dev.linen.app",
+  "build": {
+    "frontendDist": "../"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Linen",
+        "width": 1600,
+        "height": 1000,
+        "resizable": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.png"]
+  }
+}

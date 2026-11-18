@@ -1,0 +1,74 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background: dark blue-purple diagonal -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#252542"/>
+      <stop offset="100%" stop-color="#0e0e1c"/>
+    </linearGradient>
+    <!-- Horizontal bars (teal): top-lit -->
+    <linearGradient id="th" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#78f4e2"/>
+      <stop offset="100%" stop-color="#32c4a8"/>
+    </linearGradient>
+    <!-- Vertical bars (mauve): left-lit -->
+    <linearGradient id="mv" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#e8aaff"/>
+      <stop offset="100%" stop-color="#a850d8"/>
+    </linearGradient>
+    <!-- Teal junctions: brighter (H on top, catching light) -->
+    <linearGradient id="tj" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#90fcea"/>
+      <stop offset="100%" stop-color="#48d4b8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <!-- Subtle border -->
+  <rect width="512" height="512" rx="104" fill="none" stroke="#3a3a60" stroke-width="6"/>
+
+  <!--
+    3×3 weave grid:
+      bars:  84px wide, 14px gap, 3 bars = 280px
+      grid starts at 116 (60 margin + 56 centering offset)
+      V/H bar positions: 116, 214, 312   (each ends at +84)
+  -->
+
+  <!-- ── Layer 1: Horizontal bars (teal), full width with rounded caps ── -->
+  <rect x="60"  y="116" width="392" height="84" rx="42" fill="url(#th)"/>
+  <rect x="60"  y="214" width="392" height="84" rx="42" fill="url(#th)"/>
+  <rect x="60"  y="312" width="392" height="84" rx="42" fill="url(#th)"/>
+
+  <!-- ── Layer 2: Vertical bars (mauve), full height with rounded caps ── -->
+  <rect x="116" y="60"  width="84" height="392" rx="42" fill="url(#mv)"/>
+  <rect x="214" y="60"  width="84" height="392" rx="42" fill="url(#mv)"/>
+  <rect x="312" y="60"  width="84" height="392" rx="42" fill="url(#mv)"/>
+
+  <!-- ── Layer 3: Teal over mauve at (row+col) even junctions ── -->
+  <!-- (0,0) H1/V1 --> <rect x="116" y="116" width="84" height="84" fill="url(#tj)"/>
+  <!-- (0,2) H1/V3 --> <rect x="312" y="116" width="84" height="84" fill="url(#tj)"/>
+  <!-- (1,1) H2/V2 --> <rect x="214" y="214" width="84" height="84" fill="url(#tj)"/>
+  <!-- (2,0) H3/V1 --> <rect x="116" y="312" width="84" height="84" fill="url(#tj)"/>
+  <!-- (2,2) H3/V3 --> <rect x="312" y="312" width="84" height="84" fill="url(#tj)"/>
+
+  <!-- ── Depth cues: shadow at top of each teal junction (H passing over V) ── -->
+  <rect x="116" y="116" width="84" height="5" fill="#000" opacity="0.18"/>
+  <rect x="312" y="116" width="84" height="5" fill="#000" opacity="0.18"/>
+  <rect x="214" y="214" width="84" height="5" fill="#000" opacity="0.18"/>
+  <rect x="116" y="312" width="84" height="5" fill="#000" opacity="0.18"/>
+  <rect x="312" y="312" width="84" height="5" fill="#000" opacity="0.18"/>
+
+  <!-- ── Highlight: top edge sheen on horizontal bars (between V bars) ── -->
+  <rect x="60"  y="116" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+  <rect x="200" y="116" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="298" y="116" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="396" y="116" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+  <rect x="60"  y="214" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+  <rect x="200" y="214" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="298" y="214" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="396" y="214" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+  <rect x="60"  y="312" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+  <rect x="200" y="312" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="298" y="312" width="14"  height="4"         fill="#fff" opacity="0.12"/>
+  <rect x="396" y="312" width="56"  height="4" rx="2" fill="#fff" opacity="0.12"/>
+</svg>

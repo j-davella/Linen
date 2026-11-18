@@ -1,16 +1,20 @@
 import sys
 import uuid
 import html as _html
+from pathlib import Path
 
 import log
 _log = log.get('main')
+
+import audit as _audit
+from dashboard import DashboardWindow
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QPainter, QColor, QTextCursor, QTextCharFormat
+from PyQt6.QtCore import Qt, QTimer, QObject, QEvent
+from PyQt6.QtGui import QFont, QPainter, QColor, QTextCursor, QTextCharFormat, QIcon
 
 from theme import C, build_stylesheet
 from config import MODELS, DEFAULT_MODEL, DATA_DIR, BASH_CMD
@@ -22,11 +26,36 @@ def _e(text: str) -> str:
     return _html.escape(str(text))
 
 
+# ── drop-event forwarder (lets child widgets pass drops up to ChatPanel) ───────
+
+class _DropForward(QObject):
+    """Forwards drag/drop events from a child widget to a parent handler."""
+
+    def __init__(self, target: 'ChatPanel'):
+        super().__init__(target)
+        self._target = target
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t == QEvent.Type.DragEnter:
+            self._target.dragEnterEvent(event)
+            return True
+        if t == QEvent.Type.DragMove:
+            self._target.dragMoveEvent(event)
+            return True
+        if t == QEvent.Type.Drop:
+            self._target.dropEvent(event)
+            return True
+        return False
+
+
 # ── chat panel (top) ───────────────────────────────────────────────────────────
 
 class ChatPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAcceptDrops(True)
+
         vbox = QVBoxLayout(self)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
@@ -34,6 +63,7 @@ class ChatPanel(QWidget):
         self._history = QTextEdit()
         self._history.setReadOnly(True)
         self._history.setFont(QFont('JetBrainsMono Nerd Font', 11))
+        self._history.setAcceptDrops(True)
         self._history.setStyleSheet(f"""
             QTextEdit {{
                 background: {C['base']};
@@ -43,6 +73,8 @@ class ChatPanel(QWidget):
                 line-height: 1.5;
             }}
         """)
+        # Forward drops on the read-only history widget to this panel
+        self._history.installEventFilter(_DropForward(self))
         vbox.addWidget(self._history)
 
         bar = QWidget()
@@ -52,8 +84,10 @@ class ChatPanel(QWidget):
         blay.setSpacing(8)
 
         self.input = QLineEdit()
-        self.input.setPlaceholderText('Message Linen…')
+        self.input.setPlaceholderText('Message Linen…  (drop files here to attach path)')
         self.input.setFont(QFont('JetBrainsMono Nerd Font', 11))
+        self.input.setAcceptDrops(True)
+        self.input.installEventFilter(_DropForward(self))
         self.input.setStyleSheet(f"""
             QLineEdit {{
                 background: {C['surface0']};
@@ -113,6 +147,27 @@ class ChatPanel(QWidget):
         self.input.returnPressed.connect(self._submit)
         self._stop_btn.clicked.connect(self._do_stop)
 
+    # ── drag + drop (files → quoted paths appended to input) ──────────────
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.toLocalFile()]
+        if paths:
+            quoted = ' '.join(f'"{p}"' for p in paths)
+            curr = self.input.text()
+            self.input.setText((curr + ' ' + quoted).strip())
+            self.input.setFocus()
+            self.input.end(False)
+        event.acceptProposedAction()
+
+    # ── callbacks ──────────────────────────────────────────────────────────
+
     def on_send(self, fn):
         self._on_send = fn
 
@@ -120,7 +175,6 @@ class ChatPanel(QWidget):
         self._on_stop = fn
 
     def set_busy(self, busy: bool):
-        self.input.setEnabled(not busy)
         self._send_btn.setVisible(not busy)
         self._stop_btn.setVisible(busy)
         if not busy:
@@ -136,6 +190,8 @@ class ChatPanel(QWidget):
     def _do_stop(self):
         if self._on_stop:
             self._on_stop()
+
+    # ── display ────────────────────────────────────────────────────────────
 
     def add_user(self, text: str):
         self._history.append(
@@ -257,16 +313,24 @@ class HeaderBar(QWidget):
 # ── main window ────────────────────────────────────────────────────────────────
 
 class LinenWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, name: str = 'Linen', dashboard: 'DashboardWindow | None' = None):
         super().__init__()
-        self.setWindowTitle('Linen')
+        self._name = name
+        self._dashboard = dashboard
+        self._tool_count = 0
+        self._cmd_count = 0
+
+        self.setWindowTitle(name)
         self.resize(1400, 900)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
         self._poll_timer: QTimer | None = None
 
+        self._audit = _audit.Session(DEFAULT_MODEL)
+
         self._agent = LinenAgent()
+        self._agent.set_audit(self._audit)
         self._agent.text_chunk.connect(self._on_text)
         self._agent.cmd_start.connect(self._on_cmd_start)
         self._agent.exec_request.connect(self._on_exec_request)
@@ -274,6 +338,9 @@ class LinenWindow(QMainWindow):
         self._agent.agent_error.connect(self._on_error)
 
         self._build_ui()
+
+        if dashboard:
+            dashboard.register_session(name)
 
     def _build_ui(self):
         root = QWidget()
@@ -318,6 +385,10 @@ class LinenWindow(QMainWindow):
         self._chat.set_busy(True)
         self._chat.begin_assistant()
         self._agent.send(text)
+        if self._dashboard:
+            self._dashboard.update_session(self._name, busy=True)
+            self._dashboard.feed('top', 'tool',
+                '<span class="p">you</span> ', text[:80])
 
     def _user_stop(self):
         self._agent.abort()
@@ -335,8 +406,18 @@ class LinenWindow(QMainWindow):
 
     def _on_cmd_start(self, cmd: str):
         self._chat.add_tool_chip(cmd)
+        self._tool_count += 1
+        if self._dashboard:
+            self._dashboard.update_session(self._name, tools=self._tool_count)
+            self._dashboard.feed('top', 'tool',
+                '<span class="p">claude</span> ', cmd[:80])
 
     def _on_exec_request(self, cmd: str):
+        self._cmd_count += 1
+        if self._dashboard:
+            self._dashboard.update_session(self._name, cmds=self._cmd_count)
+            self._dashboard.feed('bot', 'shell',
+                '<span class="c">$</span> ', cmd[:80])
         _log.info('exec_request: %.120s', cmd)
         sentinel = f'LINEN_{uuid.uuid4().hex[:16]}'
         self._term.start_capture(sentinel)
@@ -353,7 +434,6 @@ class LinenWindow(QMainWindow):
             self._poll_elapsed += 200
             text = self._term.get_capture()
             marker = sentinel + ':'
-            # rfind: sentinel appears in the echoed command line too, use last occurrence
             idx = text.rfind(marker)
             if idx >= 0:
                 self._poll_timer.stop()
@@ -364,7 +444,7 @@ class LinenWindow(QMainWindow):
                 _log.info('sentinel found after %dms output_len=%d output=%.200s',
                           self._poll_elapsed, len(output), output.replace('\n', '↵'))
                 self._agent.provide_exec_result(output or '[no output]')
-            elif self._poll_elapsed >= 90_000:  # 90s client-side timeout
+            elif self._poll_elapsed >= 90_000:
                 self._poll_timer.stop()
                 self._term.stop_capture()
                 _log.warning('exec timeout after 90s for cmd: %.120s', cmd)
@@ -378,24 +458,37 @@ class LinenWindow(QMainWindow):
     def _on_turn_done(self):
         self._chat.end_assistant()
         self._chat.set_busy(False)
+        if self._dashboard:
+            self._dashboard.update_session(self._name, busy=False)
 
     def _on_error(self, msg: str):
         self._chat.stream_text(f'\n[error: {msg}]')
         self._chat.end_assistant()
         self._chat.set_busy(False)
+        if self._dashboard:
+            self._dashboard.update_session(self._name, busy=False)
 
     def closeEvent(self, event):
         self._agent.abort()
         self._agent.wait(2000)
         self._term.shutdown()
+        self._audit.close()
+        if self._dashboard:
+            self._dashboard.unregister_session(self._name)
         super().closeEvent(event)
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName('Linen')
+
+    _icon_path = Path(__file__).parent / 'linen.svg'
+    if _icon_path.exists():
+        app.setWindowIcon(QIcon(str(_icon_path)))
+
     app.setStyleSheet(build_stylesheet())
-    win = LinenWindow()
+
+    win = DashboardWindow()
     win.show()
     sys.exit(app.exec())
 

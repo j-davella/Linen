@@ -7,10 +7,8 @@ import termios
 import struct
 import select
 import subprocess
+import time
 from pathlib import Path
-
-import log
-_log = log.get('terminal')
 
 _ANSI_RE = re.compile(
     r'\x1b(?:[@-Z\\-_]|\[[0-9;]*[A-Za-z]|\][^\x07]*\x07)'
@@ -22,12 +20,17 @@ if str(_USER_PKGS) not in sys.path and _USER_PKGS.exists():
 
 import pyte
 
-from PyQt6.QtWidgets import QWidget, QApplication
-from PyQt6.QtGui import QPainter, QFont, QFontMetricsF, QColor
+from PyQt6.QtWidgets import QWidget, QApplication, QMenu
+from PyQt6.QtGui import QPainter, QFont, QFontMetricsF, QColor, QImage, QClipboard
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+
+import log
+_log = log.get('terminal')
 
 from theme import resolve_color, C
 from config import FONT_FAMILY, FONT_SIZE, SCROLLBACK
+
+_PASTE_DIR = Path.home() / '.linen' / 'paste'
 
 
 class PTYReader(QThread):
@@ -70,6 +73,8 @@ class TerminalWidget(QWidget):
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled)
+        self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
         self._font = QFont(FONT_FAMILY, FONT_SIZE)
         self._font.setStyleHint(QFont.StyleHint.Monospace)
@@ -84,10 +89,14 @@ class TerminalWidget(QWidget):
         self._screen = pyte.HistoryScreen(self._cols, self._rows, history=SCROLLBACK)
         self._stream = pyte.ByteStream(self._screen)
 
-        # output capture (used by LinenWindow to feed results back to agent)
+        # output capture
         self._cap_active   = False
         self._cap_sentinel = ''
         self._cap_buf: list[str] = []
+
+        # text selection
+        self._sel_start: tuple[int, int] | None = None
+        self._sel_end:   tuple[int, int] | None = None
 
         self._spawn()
 
@@ -149,7 +158,6 @@ class TerminalWidget(QWidget):
     # ── data handling ──────────────────────────────────────────────────────
 
     def _on_data(self, data):
-        # Respond to terminal capability queries so Claude Code renders properly
         if b'\x1b[c' in data or b'\x1b[0c' in data:
             self._write(b'\x1b[?1;0c')
         if b'\x1b[>c' in data or b'\x1b[>0c' in data:
@@ -185,6 +193,8 @@ class TerminalWidget(QWidget):
         self._scroll_off = 0
         self.update()
 
+    # ── capture ────────────────────────────────────────────────────────────
+
     def start_capture(self, sentinel: str):
         self._cap_buf = []
         self._cap_sentinel = sentinel
@@ -193,12 +203,59 @@ class TerminalWidget(QWidget):
 
     def stop_capture(self):
         self._cap_active = False
-        raw_len = sum(len(b) for b in self._cap_buf)
-        _log.debug('capture stopped raw_bytes=%d', raw_len)
+        _log.debug('capture stopped raw_bytes=%d', sum(len(b) for b in self._cap_buf))
 
     def get_capture(self) -> str:
         raw = ''.join(self._cap_buf)
         return _ANSI_RE.sub('', raw).replace('\r\n', '\n').replace('\r', '\n')
+
+    # ── text selection ─────────────────────────────────────────────────────
+
+    def _pixel_to_cell(self, px: float, py: float) -> tuple[int, int]:
+        col = max(0, min(int(px / self._cw), self._screen.columns - 1))
+        row = max(0, min(int(py / self._ch), self._screen.lines - 1))
+        return row, col
+
+    def _norm_sel(self):
+        if not self._sel_start or not self._sel_end:
+            return None, None
+        r1, c1 = self._sel_start
+        r2, c2 = self._sel_end
+        if (r1, c1) > (r2, c2):
+            r1, c1, r2, c2 = r2, c2, r1, c1
+        return (r1, c1), (r2, c2)
+
+    def _in_selection(self, ry: int, x: int) -> bool:
+        start, end = self._norm_sel()
+        if start is None:
+            return False
+        return start <= (ry, x) <= end
+
+    def _get_selected_text(self) -> str:
+        start, end = self._norm_sel()
+        if start is None:
+            return ''
+        r1, c1 = start
+        r2, c2 = end
+        rows = self._visible_rows()
+        lines = []
+        for ry in range(r1, min(r2 + 1, len(rows))):
+            row = rows[ry]
+            sc = c1 if ry == r1 else 0
+            ec = c2 if ry == r2 else self._screen.columns - 1
+            line = ''.join(row[x].data if x in row else ' ' for x in range(sc, ec + 1))
+            lines.append(line.rstrip())
+        return '\n'.join(lines)
+
+    def _select_all(self):
+        rows = self._visible_rows()
+        if rows:
+            self._sel_start = (0, 0)
+            self._sel_end = (len(rows) - 1, self._screen.columns - 1)
+            text = self._get_selected_text()
+            if text:
+                QApplication.clipboard().setText(text)
+            self.update()
 
     # ── rendering ──────────────────────────────────────────────────────────
 
@@ -234,6 +291,9 @@ class TerminalWidget(QWidget):
                 bg = resolve_color(ch.bg, C['base'])
                 if ch.reverse:
                     fg, bg = bg, fg
+
+                if self._in_selection(ry, x):
+                    bg = QColor(100, 140, 230, 160)
 
                 p.fillRect(int(px), int(py),
                            int(self._cw) + 1, int(self._ch), bg)
@@ -288,9 +348,10 @@ class TerminalWidget(QWidget):
         ctrl  = bool(mods & Qt.KeyboardModifier.ControlModifier)
         shift = bool(mods & Qt.KeyboardModifier.ShiftModifier)
 
-        # Ctrl+Shift+C → copy screen text
+        # Ctrl+Shift+C → copy selection (or full screen if no selection)
         if ctrl and shift and key == Qt.Key.Key_C:
-            QApplication.clipboard().setText(self.get_visible_text())
+            text = self._get_selected_text() or self.get_visible_text()
+            QApplication.clipboard().setText(text)
             return
 
         # Ctrl+Shift+V → paste
@@ -299,6 +360,16 @@ class TerminalWidget(QWidget):
             if txt:
                 self.send_text(txt)
             return
+
+        # Ctrl+Shift+A → select all visible + copy
+        if ctrl and shift and key == Qt.Key.Key_A:
+            self._select_all()
+            return
+
+        # Clear selection on any other keypress
+        if self._sel_start:
+            self._sel_start = None
+            self._sel_end = None
 
         # snap to live on any keypress while scrolled
         if self._scroll_off > 0:
@@ -326,6 +397,54 @@ class TerminalWidget(QWidget):
             self._scroll_off = max(0, self._scroll_off - 3)
         self.update()
 
+    # ── mouse ──────────────────────────────────────────────────────────────
+
+    def mousePressEvent(self, event):
+        self.setFocus()
+        if event.button() == Qt.MouseButton.MiddleButton:
+            # X11 primary selection paste (middle-click convention)
+            txt = QApplication.clipboard().text(QClipboard.Mode.Selection)
+            if not txt:
+                txt = QApplication.clipboard().text()
+            if txt:
+                self.send_text(txt)
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
+            row, col = self._pixel_to_cell(event.position().x(), event.position().y())
+            self._sel_start = (row, col)
+            self._sel_end   = (row, col)
+            self.update()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.MouseButton.LeftButton and self._sel_start is not None:
+            row, col = self._pixel_to_cell(event.position().x(), event.position().y())
+            self._sel_end = (row, col)
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            text = self._get_selected_text()
+            if text:
+                QApplication.clipboard().setText(text)
+        super().mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        paste_act    = menu.addAction('Paste  Ctrl+Shift+V')
+        copy_act     = menu.addAction('Copy Selection  Ctrl+Shift+C')
+        sel_all_act  = menu.addAction('Select All  Ctrl+Shift+A')
+        act = menu.exec(event.globalPos())
+        if act == paste_act:
+            txt = QApplication.clipboard().text()
+            if txt:
+                self.send_text(txt)
+        elif act == copy_act:
+            text = self._get_selected_text() or self.get_visible_text()
+            QApplication.clipboard().setText(text)
+        elif act == sel_all_act:
+            self._select_all()
+
     # ── resize ─────────────────────────────────────────────────────────────
 
     def resizeEvent(self, event):
@@ -343,10 +462,6 @@ class TerminalWidget(QWidget):
                     pass
         self.update()
 
-    def mousePressEvent(self, event):
-        self.setFocus()
-        super().mousePressEvent(event)
-
     def focusInEvent(self, event):
         super().focusInEvent(event)
         self.focus_gained.emit()
@@ -355,3 +470,34 @@ class TerminalWidget(QWidget):
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
         self.update()
+
+    # ── drag + drop ────────────────────────────────────────────────────────
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls() or event.mimeData().hasImage():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        md = event.mimeData()
+        if md.hasUrls():
+            paths = []
+            for url in md.urls():
+                path = url.toLocalFile()
+                if path:
+                    # If it's an image file, just paste the path
+                    paths.append(f'"{path}"')
+            if paths:
+                self.send_text(' '.join(paths))
+            event.acceptProposedAction()
+        elif md.hasImage():
+            _PASTE_DIR.mkdir(parents=True, exist_ok=True)
+            img = QImage(md.imageData())
+            if not img.isNull():
+                fname = _PASTE_DIR / f'paste_{int(time.time())}.png'
+                img.save(str(fname))
+                self.send_text(f'"{fname}"')
+                _log.info('image dropped → saved to %s', fname)
+            event.acceptProposedAction()
