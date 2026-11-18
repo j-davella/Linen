@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LINEN // Control Deck</title>
+<link rel="stylesheet" href="vendor/xterm.css">
 <style>
   :root{
     --bg:#04070d; --panel:rgba(8,16,28,.72);
@@ -25,7 +26,7 @@
     background-size:34px 34px;
   }
   .app{position:relative;height:100%;display:grid;gap:14px;padding:14px 18px 16px;
-    grid-template-columns:minmax(290px,330px) 1fr minmax(300px,350px);
+    grid-template-columns:minmax(250px,300px) minmax(0,1fr) minmax(460px,40vw);
     grid-template-rows:auto 1fr auto auto;
     grid-template-areas:"top top top" "left center right" "bar bar bar" "tbar tbar tbar";}
 
@@ -250,6 +251,47 @@
   #diag{position:fixed;inset:0;background:#010306;z-index:120;display:none;padding:36px 48px;color:var(--cyan);overflow:hidden}
   #diag.show{display:block}
   #diag pre{font-size:14px;line-height:1.35;text-shadow:0 0 8px var(--cyan)}
+
+  /* ===== v0.2: real terminals, approvals, pickers ===== */
+  #tTopPane{flex:1}
+  #tTopWrap{margin-top:auto}
+  #tTopPane .tag{position:sticky;top:0;align-self:flex-end;background:rgba(2,6,12,.85);padding:0 4px;border-radius:4px}
+  #tTopPane div.msg{color:var(--text);margin:2px 0 6px}
+  .xt{flex:1.35;min-height:0;display:flex;flex-direction:column}
+  .xtabs{display:flex;align-items:center;gap:4px;padding:5px 8px 3px;border-bottom:1px solid rgba(62,230,255,.12)}
+  .xtabs button{background:none;border:1px solid transparent;border-radius:5px;color:var(--muted);font:inherit;font-size:10px;letter-spacing:.16em;padding:2px 9px;cursor:pointer}
+  .xtabs button.on{color:var(--green);border-color:rgba(53,224,138,.45);background:rgba(53,224,138,.08)}
+  .xtabs button.ping{animation:ping .5s 6 alternate}
+  @keyframes ping{to{color:#fff;background:rgba(255,200,61,.35);border-color:var(--amber)}}
+  .xfeed{flex:1;min-width:0;margin-left:8px;font-size:10.5px;color:var(--muted);text-align:right}
+  .xfeed>div{display:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .xfeed>div:last-child{display:block}
+  .xhost{flex:1;min-height:0;padding:4px 2px 2px 8px;display:none}
+  .xhost.on{display:block}
+  .xhost .xterm-viewport{background:transparent!important}
+  .xhost .xterm-viewport::-webkit-scrollbar{width:8px}
+  .xhost .xterm-viewport::-webkit-scrollbar-thumb{background:rgba(62,230,255,.25);border-radius:4px}
+  .pick{display:flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.14em;color:var(--muted)}
+  .pick select{background:rgba(8,16,28,.9);color:var(--cyan);border:1px solid var(--cyan-dim);border-radius:6px;font:inherit;font-size:11px;letter-spacing:.08em;padding:3px 6px;outline:0;cursor:pointer}
+  .pick select:disabled{opacity:.5;cursor:default}
+  #cost{font-size:11px;color:var(--muted);letter-spacing:.08em}
+  .bar button.stop svg{stroke:var(--red)}
+  .bar.busy{border-color:rgba(164,92,255,.6)}
+  .b-wait{color:#ffe2a0;border-color:var(--amber);background:rgba(255,200,61,.14);box-shadow:0 0 10px rgba(255,200,61,.25)}
+  .app.m-shell{grid-template-columns:56px minmax(240px,.55fr) minmax(0,1.45fr)}
+  .m-shell .left .panel{padding:16px 10px;overflow:hidden}
+  .m-shell .left .ptitle{font-size:0;gap:0}
+  .m-shell .left .panel>*:not(.ptitle):not(.edge){visibility:hidden}
+  #approvals{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:10px;width:min(720px,calc(100vw - 40px))}
+  .appr{background:rgba(10,8,4,.96);border:1px solid var(--amber);border-radius:12px;padding:14px 16px;box-shadow:0 0 50px rgba(255,200,61,.25);animation:apin .35s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes apin{from{opacity:0;transform:translateY(20px) scale(.97)}}
+  .appr .ah{font-size:11px;letter-spacing:.18em;color:var(--amber);text-transform:uppercase;margin-bottom:8px}
+  .appr pre{font-family:"JetBrains Mono",Consolas,monospace;font-size:13px;color:#fff;white-space:pre-wrap;word-break:break-word;max-height:30vh;overflow:auto;background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px}
+  .appr .ab{display:flex;justify-content:flex-end;gap:10px;margin-top:10px}
+  .appr button{font:inherit;font-size:12px;letter-spacing:.14em;border-radius:8px;padding:7px 16px;cursor:pointer;background:none}
+  .appr .deny{border:1px solid var(--red);color:#ffb0b8}
+  .appr .ok{border:1px solid var(--green);color:#8ff0bd;background:rgba(53,224,138,.12)}
+  .appr kbd{font:inherit;font-size:10px;opacity:.7;margin-left:6px}
 </style>
 </head>
 <body>
@@ -263,12 +305,15 @@
     <span class="sep"></span>
     <span class="tnode" style="gap:10px">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3ee6ff" stroke-width="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
-      LINEN &bull; NIXOS &bull; KDE PLASMA &bull; LOCAL
+      <span id="sysLabel">LINEN &bull; LOCAL</span>
       <span class="dot"></span>
     </span>
     <span class="spacer"></span>
+    <span id="cost" class="mono"></span>
+    <label class="pick mono">MODEL <select id="model"></select></label>
+    <label class="pick mono">APPROVE <select id="approval"><option value="risky">RISKY</option><option value="all">ALL</option><option value="off">OFF</option></select></label>
     <span id="hostmode" style="display:none">DEVICE</span>
-    <div class="modes" id="modes"><button class="on" data-m="observe">OBSERVE</button><button data-m="command">COMMAND</button><button data-m="focus">FOCUS</button></div>
+    <div class="modes" id="modes"><button class="on" data-m="observe">OBSERVE</button><button data-m="command">COMMAND</button><button data-m="shell">SHELL</button><button data-m="focus">FOCUS</button></div>
   </div>
 
   <!-- LEFT -->
@@ -289,7 +334,7 @@
       <div class="node" style="left:50%;top:7%"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg><div class="v" id="sTools">0</div><div class="k">Tool calls</div></div>
       <div class="node" style="left:83%;top:21%"><svg viewBox="0 0 24 24"><path d="M4 17l5-5-5-5M12 19h8"/></svg><div class="v" id="sCmds">0</div><div class="k">Shell cmds</div></div>
       <div class="node" style="left:17%;top:79%"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><div class="v" id="sLogs">0 MB</div><div class="k">Logs saved</div></div>
-      <div class="node big" style="left:50%;top:92%"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><div class="v">AUTONOMOUS</div><div class="k">VM sandbox on</div></div>
+      <div class="node big" style="left:50%;top:92%"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><div class="v" id="sGuardV">GUARDED</div><div class="k" id="sGuardK">Approvals: risky</div></div>
       <div class="node" style="left:83%;top:79%"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div class="v mono" id="sUp">00:00:00</div><div class="k">Uptime</div></div>
       <div id="radar"><canvas width="760" height="760"></canvas><div class="lg">LAST 60 SECONDS &bull; CLICK TO CLOSE</div></div>
     </div>
@@ -300,9 +345,14 @@
     <div class="term mono">
       <div class="pane" id="tTopPane"><span class="tag">CLAUDE CODE</span><div id="tTopWrap"></div></div>
       <div class="dv"></div>
-      <div class="pane"><span class="tag">SHELL</span><div id="tBotWrap" style="display:contents"></div></div>
+      <div class="xt">
+        <div class="xtabs"><button data-t="claude" class="on" title="Where Claude's commands run. You can type here too.">CLAUDE</button><button data-t="you" title="Your own shell">YOU</button><div id="tBotWrap" class="xfeed"></div></div>
+        <div id="xt-claude" class="xhost on"></div>
+        <div id="xt-you" class="xhost"></div>
+      </div>
     </div>
   </div>
+  <div id="approvals"></div>
 
   <!-- CLAUDE BAR -->
   <form class="bar" id="bar" autocomplete="off">
@@ -314,11 +364,13 @@
   <!-- TERMINAL BAR -->
   <form class="tbar" id="tbar" autocomplete="off">
     <svg viewBox="0 0 24 24"><path d="M4 17l5-5-5-5"/><path d="M12 19h8"/></svg>
-    <input id="tcmd" class="mono" placeholder="$ shell command…" spellcheck="false">
+    <input id="tcmd" class="mono" placeholder="$ command for YOUR terminal…" spellcheck="false">
     <button type="submit" aria-label="Run"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
   </form>
 </div>
 
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const rnd = (a,b)=>Math.random()*(b-a)+a;
@@ -332,7 +384,7 @@ const NODE_IDX={tool:1, shell:2, log:3};
 
 /* ---------- data (fed from Python bridge) ---------- */
 let instances = [];
-const FACE={ACTIVE:"(???)", IDLE:"(-_-)", DONE:"(^?^)", ERROR:"(>_<)"};
+const FACE={ACTIVE:"(•̀ᴗ•́)", IDLE:"(-_-)", DONE:"(^▿^)", ERROR:"(>_<)", WAITING:"(°o°)"};
 const stats = {tools:0, cmds:0, logs:0, start:Date.now()};
 
 /* ---------- events (feeds ribbons, counters, radar) ---------- */
@@ -344,7 +396,7 @@ function emit(type){
 
 /* ---------- render ---------- */
 function badge(s){
-  const c = {ACTIVE:"b-active",IDLE:"b-idle",DONE:"b-done",ERROR:"b-err"}[s];
+  const c = {ACTIVE:"b-active",IDLE:"b-idle",DONE:"b-done",ERROR:"b-err",WAITING:"b-wait"}[s];
   return `<span class="badge ${c}">${s}</span>`;
 }
 function renderInst(flashFirst){
@@ -413,7 +465,7 @@ function tick(){
   tween($("#sTools"),stats.tools,v=>Math.round(v).toLocaleString());
   tween($("#sCmds"),stats.cmds,v=>Math.round(v).toLocaleString());
   tween($("#sLogs"),stats.logs,v=>v.toFixed(1)+" MB");
-  $("#sInst").textContent = instances.filter(i=>i.status==="ACTIVE"||i.status==="IDLE").length;
+  $("#sInst").textContent = instances.filter(i=>i.status!=="ERROR").length;
   const u = Math.floor((Date.now()-stats.start)/1000), p=n=>String(n).padStart(2,"0");
   $("#sUp").textContent = `${p(Math.floor(u/3600))}:${p(Math.floor(u%3600/60))}:${p(u%60)}`;
   $("#clock").textContent = new Date().toLocaleTimeString([], {hour12:false});
@@ -463,9 +515,10 @@ function setMode(m){
   tline("bot",'<span class="g">linen</span> focus moved to '+(m==="vm"?"VM":"device"));
 }
 function setView(v){
-  view=v; const a=$("#app"); a.classList.remove("m-command","m-focus");
+  view=v; const a=$("#app"); a.classList.remove("m-command","m-focus","m-shell");
   if(v==="command"){ a.classList.add("m-command"); cmd.focus(); }
   if(v==="focus") a.classList.add("m-focus");
+  if(v==="shell") a.classList.add("m-shell");
   document.querySelectorAll("#modes button").forEach(b=>b.classList.toggle("on",b.dataset.m===v));
 }
 $("#modes").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setView(b.dataset.m); });
@@ -502,12 +555,14 @@ addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
   if(diag.classList.contains("show")){ if(diagDone||k==="escape") closeDiag(); return; }
   if(e.ctrlKey&&e.altKey&&(e.key==="ArrowLeft"||e.key==="ArrowRight")){ e.preventDefault(); setMode(mode==="device"?"vm":"device"); return; }
-  if(document.activeElement===cmd){ if(k==="escape"){ cmd.blur(); if(view==="command") setView("observe"); } return; }
+  if(document.activeElement===cmd){ if(k==="escape"){ if(window._busy&&window._stop){ window._stop(); return; } cmd.blur(); if(view==="command") setView("observe"); } return; }
+  if(e.target&&e.target.closest&&e.target.closest("input,textarea,select,.xterm")) return;
+  if(window._apprKey&&window._apprKey(k,e)) { e.preventDefault(); return; }
   kpos = (k===KON[kpos]) ? kpos+1 : (k===KON[0]?1:0);
   if(kpos===KON.length){ kpos=0; runDiag(); return; }
   if(k==="escape"){ closeRadar(); }
   if(k==="1") setMode("device"); if(k==="2") setMode("vm");
-  if(k==="o") setView("observe"); if(k==="c"){ e.preventDefault(); setView("command"); } if(k==="f") setView("focus");
+  if(k==="o") setView("observe"); if(k==="c"){ e.preventDefault(); setView("command"); } if(k==="f") setView("focus"); if(k==="s") setView("shell");
   if(k==="r") toggleRadar();
   if(k==="/"){ e.preventDefault(); cmd.focus(); }
 });
@@ -715,7 +770,7 @@ document.querySelectorAll(".panel,.bar").forEach(p=>{ const e=document.createEle
 /* ---------- boot sequence ---------- */
 (async function boot(){
   const el=$("#bootTxt"), app=$("#app");
-  const lines=["LINEN v0.1  //  boot","mounting log store ............ ok","spawning pty (top) ............ ok","spawning pty (bottom) ......... ok","attaching claude code ......... ok","probing machines: device, vm .. ok","","all systems nominal"];
+  const lines=["LINEN v0.2  //  boot","mounting audit log ............ ok","spawning pty (claude) ......... ok","spawning pty (you) ............ ok","linen tools (mcp) ............. ok","attaching claude code ......... ok","","all systems nominal"];
   let skip=false; $("#boot").addEventListener("click",()=>skip=true);
   for(const l of lines){ if(skip)break; el.textContent+=l+"\n"; await sleep(l?230:100); }
   if(!skip) await sleep(450);
@@ -725,76 +780,194 @@ document.querySelectorAll(".panel,.bar").forEach(p=>{ const e=document.createEle
   runTerm();
 })();
 
-/* ===== Python bridge (Qt WebEngine) ===== */
+/* ===== Tauri bridge ===== */
 (function(){
-  if(typeof qt==='undefined') return;
-  new QWebChannel(qt.webChannelTransport,function(ch){
-    const bridge=ch.objects.bridge;
-    window._bridgeMode=true;
-    _termStop=true;
+  if(typeof window.__TAURI__==='undefined') return;
+  const invoke=window.__TAURI__.core.invoke;
+  const listen=window.__TAURI__.event.listen;
 
-    // live stats + instance list
-    bridge.update.connect(function(raw){
-      try{
-        const d=JSON.parse(raw);
-        if(d.tools!=null) stats.tools=d.tools;
-        if(d.cmds!=null) stats.cmds=d.cmds;
-        if(d.logsMB!=null) stats.logs=d.logsMB;
-        if(d.uptimeMs!=null) stats.start=Date.now()-d.uptimeMs;
-        if(d.instances){instances=d.instances;renderInst();}
-      }catch(e){}
-    });
+  window._bridgeMode=true;
+  _termStop=true;
+  const T=window.__TAURI__;
 
-    // discrete feed lines (tool calls, shell output labels)
-    bridge.feedLine.connect(function(raw){
-      try{
-        const d=JSON.parse(raw);
-        emit(d.ev||'tool');
-        tline(d.pane||'top',d.prefix+'<span class="tx">'+esc(d.text)+'</span>');
-      }catch(e){}
-    });
+  /* --- state, pickers --- */
+  const modelSel=$("#model"), apprSel=$("#approval");
+  function setGuard(m){
+    $("#sGuardV").textContent = m==="off" ? "AUTONOMOUS" : "GUARDED";
+    $("#sGuardK").textContent = "Approvals: "+m;
+  }
+  invoke('get_state').then(function(s){
+    const ws=(s.workspace||"").split(/[\\/]/).filter(Boolean).pop()||"~";
+    $("#sysLabel").textContent="LINEN v"+s.version+" • "+s.os+" • "+s.shell.toUpperCase()+" • "+ws.toUpperCase();
+    $("#sysLabel").title=s.workspace;
+    modelSel.innerHTML=s.models.concat(s.models.indexOf(s.model)<0?[s.model]:[]).map(function(m){return '<option'+(m===s.model?' selected':'')+'>'+esc(m)+'</option>';}).join("");
+    apprSel.value=s.approval; setGuard(s.approval);
+  });
+  modelSel.addEventListener('change',function(){
+    const m=modelSel.value;
+    invoke('set_model',{model:m}).catch(function(err){ tline('top','<span class="y">model</span> '+esc(String(err))); invoke('get_state').then(function(s){modelSel.value=s.model;}); });
+  });
+  apprSel.addEventListener('change',function(){ invoke('set_approval',{mode:apprSel.value}); setGuard(apprSel.value); });
 
-    // Claude streaming response
-    let _sEl=null, _sTx=null;
-    bridge.streamStart.connect(function(){
-      emit('tool');
-      _sEl=tline('top','<span class="p">linen</span> <span data-stream></span><span class="cursor"></span>');
-      _sTx=_sEl.querySelector('[data-stream]');
-    });
-    bridge.streamChunk.connect(function(text){
-      if(!_sTx) return;
-      _sTx.textContent+=text;
-      const p=document.getElementById('tTopPane'); if(p) p.scrollTop=p.scrollHeight;
-    });
-    bridge.streamEnd.connect(function(){
-      if(!_sEl) return;
-      const cur=_sEl.querySelector('.cursor'); if(cur) cur.remove();
-      _sEl=null; _sTx=null;
-    });
+  listen('update',function(e){
+    const d=e.payload;
+    if(d.tools!=null)    stats.tools=d.tools;
+    if(d.cmds!=null)     stats.cmds=d.cmds;
+    if(d.logs_mb!=null)  stats.logs=d.logs_mb;
+    if(d.uptime_ms!=null) stats.start=Date.now()-d.uptime_ms;
+    if(d.instances){instances=d.instances;renderInst();}
+    if(d.cost_usd!=null) $("#cost").textContent = d.cost_usd>0 ? "$"+d.cost_usd.toFixed(2)+(d.jobs?"  •  "+d.jobs+" JOB"+(d.jobs>1?"S":""):"") : (d.jobs?d.jobs+" JOB"+(d.jobs>1?"S":""):"");
+  });
 
-    // busy state → disable/restore input
-    bridge.setBusy.connect(function(busy){
-      const inp=document.getElementById('cmd');
-      inp.disabled=busy;
-      inp.placeholder=busy?'Claude is thinking…':'Message Claude…';
-    });
+  listen('feed_line',function(e){
+    const d=e.payload;
+    emit(d.ev||'tool');
+    tline(d.pane||'top',d.prefix+'<span class="tx">'+esc(d.text)+'</span>');
+  });
 
-    // Claude bar → Python (capture phase, before the fly animation)
-    document.getElementById('bar').addEventListener('submit',function(){
-      const v=document.getElementById('cmd').value.trim();
-      if(v) bridge.sendMessage(v);
-    },true);
+  /* --- streamed replies --- */
+  let _sEl=null,_sTx=null;
+  listen('stream_start',function(){
+    emit('tool');
+    _sEl=tline('top','<span class="p">linen</span> <span data-stream></span><span class="cursor"></span>');
+    _sEl.className='msg';
+    _sTx=_sEl.querySelector('[data-stream]');
+  });
+  listen('stream_chunk',function(e){
+    if(!_sTx) return;
+    _sTx.textContent+=e.payload;
+    const p=document.getElementById('tTopPane'); if(p) p.scrollTop=p.scrollHeight;
+  });
+  listen('stream_end',function(){
+    if(!_sEl) return;
+    const cur=_sEl.querySelector('.cursor'); if(cur) cur.remove();
+    _sEl=null; _sTx=null;
+  });
 
-    // Terminal bar → Python
-    document.getElementById('tbar').addEventListener('submit',function(e){
-      e.preventDefault();
-      const v=document.getElementById('tcmd').value.trim();
-      if(!v) return;
-      document.getElementById('tcmd').value='';
-      emit('shell');
-      tline('bot','<span class="c">$</span> <span class="tx">'+esc(v)+'</span>');
-      bridge.sendToTerminal(v);
+  /* --- busy / stop --- */
+  const bar=$("#bar"), sendBtn=bar.querySelector('button'), sendIcon=sendBtn.innerHTML;
+  const stopIcon='<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  window._busy=false;
+  window._stop=function(){ invoke('stop'); };
+  listen('set_busy',function(e){
+    const busy=!!e.payload; window._busy=busy;
+    cmd.disabled=busy; bar.classList.toggle('busy',busy);
+    cmd.placeholder=busy?'Claude is working…  (Esc or ■ to stop)':'Message Claude…';
+    sendBtn.innerHTML=busy?stopIcon:sendIcon; sendBtn.classList.toggle('stop',busy);
+    sendBtn.setAttribute('aria-label',busy?'Stop':'Send');
+    modelSel.disabled=busy;
+    if(!busy) setTimeout(function(){ if(document.activeElement===document.body) cmd.focus(); },50);
+  });
+  addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&window._busy&&!document.querySelector('.appr')&&!(e.target.closest&&e.target.closest('.xterm'))){ e.preventDefault(); window._stop(); }
+  });
+
+  bar.addEventListener('submit',function(e){
+    if(window._busy){ e.preventDefault(); e.stopImmediatePropagation(); window._stop(); return; }
+    const v=cmd.value.trim();
+    if(v) invoke('send_message',{text:v});
+  },true);
+
+  /* --- drag files onto the window: quoted paths go into the message --- */
+  try{
+    T.webview.getCurrentWebview().onDragDropEvent(function(ev){
+      const p=ev.payload; if(p.type!=='drop'||!p.paths||!p.paths.length) return;
+      const q=p.paths.map(function(x){return '"'+x+'"';}).join(' ');
+      cmd.value=(cmd.value+' '+q).trim(); cmd.focus();
     });
+  }catch(err){}
+
+  /* --- approvals --- */
+  const apprBox=$("#approvals");
+  function decide(id,allow,ev){
+    const via = ev ? (ev.type+(ev.key?':'+ev.key:'')+(ev.isTrusted?'':' (synthetic)')+(ev.clientX!=null?' @'+ev.clientX+','+ev.clientY:'')+' detail='+ev.detail) : 'unknown';
+    invoke('approval_decide',{id:id,allow:allow,via:via});
+    const el=document.getElementById('ap-'+id); if(el) el.remove();
+  }
+  listen('approval_request',function(e){
+    const d=e.payload;
+    const el=document.createElement('div'); el.className='appr'; el.id='ap-'+d.id;
+    el.innerHTML='<div class="ah">Approval needed • '+esc(d.kind)+' • '+esc(d.reason)+'</div><pre></pre>'+
+      '<div class="ab"><button class="deny">DENY<kbd>N</kbd></button><button class="ok">APPROVE<kbd>Y</kbd></button></div>';
+    el.querySelector('pre').textContent=d.detail;
+    el.querySelector('.deny').onclick=function(ev){decide(d.id,false,ev);};
+    el.querySelector('.ok').onclick=function(ev){decide(d.id,true,ev);};
+    apprBox.appendChild(el); emit('log'); aber();
+    // Deliberately no auto-focus: a stray Enter/Space must never approve.
+    el.querySelectorAll('button').forEach(function(b){ b.addEventListener('keydown',function(ev){ if(ev.key==='Enter'||ev.key===' ') ev.preventDefault(); }); });
+  });
+  listen('approval_closed',function(e){ const el=document.getElementById('ap-'+e.payload); if(el) el.remove(); });
+  window._apprKey=function(k,ev){
+    const first=apprBox.querySelector('.appr'); if(!first) return false;
+    const id=first.id.slice(3);
+    if(k==='y'){ decide(id,true,ev); return true; }
+    if(k==='n'){ decide(id,false,ev); return true; }
+    return false;
+  };
+
+  /* --- real terminals (xterm.js <-> PTYs) --- */
+  const XTHEME={background:'rgba(0,0,0,0)',foreground:'#d8f6ff',cursor:'#3ee6ff',cursorAccent:'#04070d',selectionBackground:'rgba(100,140,230,.45)',
+    black:'#2a2a44',red:'#ff6e88',green:'#90ee88',yellow:'#ffe484',blue:'#7ab4ff',magenta:'#d084ff',cyan:'#4eecd4',white:'#e8f4ff',
+    brightBlack:'#6a6a9a',brightRed:'#ff8aa0',brightGreen:'#aaf5a2',brightYellow:'#fff0a8',brightBlue:'#9cc8ff',brightMagenta:'#e0a8ff',brightCyan:'#7ff5e4',brightWhite:'#ffffff'};
+  const terms={};
+  function makeTerm(id){
+    const host=document.getElementById('xt-'+id);
+    const t=new Terminal({fontFamily:'"JetBrains Mono","Cascadia Mono",Consolas,monospace',fontSize:13,lineHeight:1.15,
+      cursorBlink:true,allowTransparency:true,scrollback:5000,theme:XTHEME,allowProposedApi:false});
+    const fit=new FitAddon.FitAddon(); t.loadAddon(fit); t.open(host);
+    const st={t:t,fit:fit,host:host,ready:false,buf:[]};
+    t.onData(function(data){ invoke('term_input',{id:id,data:data}); });
+    t.onResize(function(sz){ invoke('term_resize',{id:id,cols:sz.cols,rows:sz.rows}); });
+    t.attachCustomKeyEventHandler(function(ev){
+      if(ev.type!=='keydown') return true;
+      if(ev.ctrlKey&&ev.shiftKey&&ev.code==='KeyC'){ const s=t.getSelection(); if(s) navigator.clipboard.writeText(s).catch(function(){}); return false; }
+      if(ev.ctrlKey&&ev.shiftKey&&ev.code==='KeyV'){ navigator.clipboard.readText().then(function(x){ if(x) t.paste(x); }).catch(function(){}); return false; }
+      if(ev.ctrlKey&&!ev.shiftKey&&ev.code==='KeyC'&&t.hasSelection()){ navigator.clipboard.writeText(t.getSelection()).catch(function(){}); t.clearSelection(); return false; }
+      return true;
+    });
+    host.addEventListener('contextmenu',function(ev){
+      ev.preventDefault();
+      if(t.hasSelection()){ navigator.clipboard.writeText(t.getSelection()).catch(function(){}); t.clearSelection(); }
+      else navigator.clipboard.readText().then(function(x){ if(x) t.paste(x); }).catch(function(){});
+    });
+    new ResizeObserver(function(){ if(host.offsetWidth>0&&host.offsetHeight>0){ try{ fit.fit(); }catch(err){} } }).observe(host);
+    terms[id]=st;
+    return st;
+  }
+  makeTerm('claude'); makeTerm('you');
+  listen('term_output',function(e){
+    const st=terms[e.payload.id]; if(!st) return;
+    if(st.ready) st.t.write(e.payload.data); else st.buf.push(e.payload.data);
+  }).then(function(){
+    Object.keys(terms).forEach(function(id){
+      const st=terms[id];
+      invoke('term_replay',{id:id}).then(function(text){
+        st.t.write(text); st.ready=true; st.buf=[];  // replay already includes anything buffered
+        try{ st.fit.fit(); }catch(err){}
+        invoke('term_resize',{id:id,cols:st.t.cols,rows:st.t.rows});
+      });
+    });
+  });
+  function showTab(id){
+    document.querySelectorAll('.xtabs button').forEach(function(b){ b.classList.toggle('on',b.dataset.t===id); });
+    Object.keys(terms).forEach(function(k){ terms[k].host.classList.toggle('on',k===id); });
+    setTimeout(function(){ try{ terms[id].fit.fit(); }catch(err){} },0);
+  }
+  document.querySelectorAll('.xtabs button').forEach(function(b){ b.addEventListener('click',function(){ showTab(b.dataset.t); terms[b.dataset.t].t.focus(); }); });
+  listen('attention',function(e){
+    const id=e.payload||'claude'; showTab(id);
+    const b=document.querySelector('.xtabs button[data-t="'+id+'"]'); if(b){ b.classList.remove('ping'); void b.offsetWidth; b.classList.add('ping'); }
+    terms[id].t.focus();
+  });
+
+  document.getElementById('tbar').addEventListener('submit',function(e){
+    e.preventDefault();
+    const v=document.getElementById('tcmd').value.trim();
+    if(!v) return;
+    document.getElementById('tcmd').value='';
+    emit('shell');
+    tline('bot','<span class="c">$</span> <span class="tx">'+esc(v)+'</span>');
+    invoke('send_to_terminal',{cmd:v});
   });
 })();
 </script>

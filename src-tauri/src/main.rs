@@ -1,4 +1,5 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// No console window, even in debug builds: logs go to ~/.linen/logs.
+#![windows_subsystem = "windows"]
 
 fn main() {
     linen_lib::run()

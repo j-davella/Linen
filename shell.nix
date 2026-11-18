@@ -1,13 +1,12 @@
 { pkgs ? import <nixpkgs> {} }:
 pkgs.mkShell {
+  # v0.2 owns its terminals through a PTY (portable-pty): tmux is no longer needed.
   nativeBuildInputs = with pkgs; [
     rustup
     pkg-config
-    tmux
   ];
 
   buildInputs = with pkgs; [
-    openssl
     webkitgtk_4_1
     gtk3
     libsoup_3
@@ -20,7 +19,7 @@ pkgs.mkShell {
     at-spi2-core
     dbus
     glib-networking
-    xdotool
+    openssl
   ];
 
   shellHook = ''
